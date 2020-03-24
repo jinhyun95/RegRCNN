@@ -36,11 +36,11 @@ class Configs(DefaultConfigs):
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/home/gregor/networkdrives/E130-Personal/Goetz/Datenkollektive/Lungendaten/Nodules_LIDC_IDRI'
-        self.raw_data_dir = '{}/new_nrrd'.format(self.root_dir)
-        self.pp_dir = '/media/gregor/HDD2TB/data/lidc/pp_20200309_dev'
+        self.root_dir = '/data/public/rw/LIDC_IDRI/'
+        self.raw_data_dir = '{}/new_nrrds'.format(self.root_dir)
+        self.pp_dir = '{}/new_pp_norm'.format(self.root_dir)
         # 'merged' for one gt per image, 'single_annotator' for four gts per image.
-        self.gts_to_produce = ["single_annotator", "merged"]
+        self.gts_to_produce = ["merged"]
 
         self.target_spacing = (0.7, 0.7, 1.25)
 
@@ -49,19 +49,18 @@ class Configs(DefaultConfigs):
         #########################
 
         # path to preprocessed data.
-        #self.pp_name = 'pp_20190318'
-        self.pp_name = 'pp_20200309_dev'
+        self.pp_name = 'lidc_reg'
 
         self.input_df_name = 'info_df.pickle'
-        self.data_sourcedir = '/media/gregor/HDD2TB/data/lidc/{}/'.format(self.pp_name)
+        self.data_sourcedir = '/data/public/rw/{}/'.format(self.pp_name)
 
         # settings for deployment on cluster.
         if server_env:
             # path to preprocessed data.
-            self.data_sourcedir = '/datasets/data_ramien/lidc/{}_npz/'.format(self.pp_name)
+            self.data_sourcedir = '/data/public/rw/{}/'.format(self.pp_name)
 
-        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_fpn'].
-        self.model = 'mrcnn'
+        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_fpn', 'ours'].
+        self.model = 'ours'
         self.model_path = 'models/{}.py'.format(self.model if not 'retina' in self.model else 'retina_net')
         self.model_path = os.path.join(self.source_dir, self.model_path)
 
@@ -83,7 +82,7 @@ class Configs(DefaultConfigs):
         self.start_filts = 48 if self.dim == 2 else 18
         self.end_filts = self.start_filts * 4 if self.dim == 2 else self.start_filts * 2
         self.res_architecture = 'resnet50' # 'resnet101' , 'resnet50'
-        self.norm = None # one of None, 'instance_norm', 'batch_norm'
+        self.norm = 'batch_norm' # one of None, 'instance_norm', 'batch_norm'
 
         # one of 'xavier_uniform', 'xavier_normal', or 'kaiming_normal', None (=default = 'kaiming_uniform')
         self.weight_init = None
@@ -443,3 +442,18 @@ class Configs(DefaultConfigs):
             if self.model == 'retina_unet':
                 self.operate_stride1 = True
 
+        elif self.model == 'ours':
+            # implement extra anchor-scales according to retina-net publication.
+            self.rpn_anchor_scales['xy'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
+                                            self.rpn_anchor_scales['xy']]
+            self.rpn_anchor_scales['z'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
+                                           self.rpn_anchor_scales['z']]
+            self.n_anchors_per_pos = len(self.rpn_anchor_ratios) * 3
+
+            self.n_rpn_features = 256 if self.dim == 2 else 128
+
+            # pre-selection of detections for NMS-speedup. per entire batch.
+            self.pre_nms_limit = (500 if self.dim == 2 else 6250) * self.batch_size
+
+            # anchor matching iou is lower than in Mask R-CNN according to https://arxiv.org/abs/1708.02002
+            self.anchor_matching_iou = 0.5

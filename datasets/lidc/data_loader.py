@@ -581,7 +581,7 @@ class BatchGenerator_sa(dutils.BatchGenerator):
                         for tix in np.argsort(batch_roi_counts):
                             # pick slices of patient that have roi of sought-for target
                             # np.unique(seg[...,sl_ix][seg[...,sl_ix]>0]) gives roi_ids (numbering) of rois in slice sl_ix
-                            elig_slices = [sl_ix for sl_ix in np.arange(z) if np.count_nonzero(
+                            elig_slices = [sl_ix for sl_ix in np.arange(1, z - 1) if np.count_nonzero(
                                 patient_balance_ts[np.unique(seg[..., sl_ix][seg[..., sl_ix] > 0]) - 1] ==
                                 self.unique_ts[tix]) > 0]
                             if len(elig_slices) > 0:
@@ -596,8 +596,12 @@ class BatchGenerator_sa(dutils.BatchGenerator):
                 else:
                     sl_pick_ix = np.random.choice(z, size=None)
 
-                data = data[..., sl_pick_ix]
-                seg = seg[..., sl_pick_ix]
+                if self.cf.model == 'ours':
+                    data = data[..., [sl_pick_ix - 1, sl_pick_ix, sl_pick_ix + 1]]
+                    seg = seg[..., [sl_pick_ix - 1, sl_pick_ix, sl_pick_ix + 1]]
+                else:
+                    data = data[..., sl_pick_ix]
+                    seg = seg[..., sl_pick_ix]
 
             # pad data if smaller than pre_crop_size.
             if np.any([data.shape[dim + 1] < ps for dim, ps in enumerate(self.cf.pre_crop_size)]):
